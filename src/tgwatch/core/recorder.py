@@ -30,6 +30,10 @@ SENSITIVE_KEYS = frozenset(
         "phone_number",
         "api_id",
         "api_hash",
+        "account_id",
+        "user_id",
+        "tg_id",
+        "id",
     }
 )
 
@@ -37,6 +41,9 @@ REDACTED = "***"
 
 # Regex : token bot Telegram (6+ chiffres : 30+ chars word/tiret)
 TOKEN_RE = re.compile(r"\d{6,}:[\w-]{30,}")
+
+# Regex : session string Telethon (commence par "1", suivi de 30+ chars base64)
+SESSION_RE = re.compile(r"1[A-Za-z0-9+/=]{30,}")
 
 MAX_PAYLOAD_BYTES = 4096
 TRUNCATION_MARKER = "...[truncated]"
@@ -47,18 +54,22 @@ TRUNCATION_MARKER = "...[truncated]"
 # ---------------------------------------------------------------------------
 
 
-def _mask(value: object) -> object:
+JsonValue = dict | list | str | int | float | bool | None
+
+
+def _mask(value: JsonValue) -> JsonValue:
     """Masque récursivement les secrets dans un payload.
 
     Règles :
     - dict  : redige les clés dans SENSITIVE_KEYS (insensible à la casse),
               applique _mask récursivement sur les valeurs non-sensibles.
     - list  : applique _mask sur chaque élément.
-    - str   : remplace tout token bot (TOKEN_RE) par REDACTED.
+    - str   : remplace tout token bot (TOKEN_RE) et session string (SESSION_RE)
+              par REDACTED.
     - autre : retourne tel quel (int, float, bool, None…).
     """
     if isinstance(value, dict):
-        result = {}
+        result: dict = {}
         for k, v in value.items():
             if isinstance(k, str) and k.lower() in SENSITIVE_KEYS:
                 result[k] = REDACTED
@@ -68,7 +79,9 @@ def _mask(value: object) -> object:
     if isinstance(value, list):
         return [_mask(item) for item in value]
     if isinstance(value, str):
-        return TOKEN_RE.sub(REDACTED, value)
+        masked = TOKEN_RE.sub(REDACTED, value)
+        masked = SESSION_RE.sub(REDACTED, masked)
+        return masked
     # int, float, bool, None — retournés tels quels
     return value
 

@@ -56,7 +56,7 @@ class TgwatchMiddleware:
             self._recorder.record_event(
                 self._name,
                 "error",
-                {"type": type(exc).__name__, "msg": str(exc)[:200]},
+                {"type": type(exc).__name__},
             )
             raise
 

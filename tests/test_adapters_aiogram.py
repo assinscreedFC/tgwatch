@@ -97,6 +97,8 @@ async def test_middleware_counts_message(recorder, storage):
 
 async def test_middleware_reraises_and_records(recorder, storage):
     """Handler qui lève RuntimeError → exception re-raised ET event 'error' enregistré."""
+    import json
+
     mw = TgwatchMiddleware(recorder, "bot_err")
 
     async def failing_handler(event, data):
@@ -111,6 +113,10 @@ async def test_middleware_reraises_and_records(recorder, storage):
     events = storage.list_events(client.id)
     error_events = [e for e in events if e.type == "error"]
     assert len(error_events) == 1
+    # S1 : payload contient {"type": "RuntimeError"} et pas de clé "msg"
+    payload = json.loads(error_events[0].payload_json)
+    assert payload.get("type") == "RuntimeError"
+    assert "msg" not in payload
 
 
 async def test_middleware_floodwait(recorder, storage):

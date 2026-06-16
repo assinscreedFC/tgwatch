@@ -197,3 +197,133 @@ class TestPayloadBoundedInDb:
         payloads = _read_all_payloads(db_path)
         assert "[truncated]" not in payloads[0]
         assert "value" in payloads[0]
+
+
+# ---------------------------------------------------------------------------
+# S2 : account_id / user_id / tg_id / id masqués (nouvelles clés sensibles)
+# ---------------------------------------------------------------------------
+
+
+class TestAccountIdMasking:
+    """S2 — Les clés account_id/user_id/tg_id/id sont masquées dans les payloads."""
+
+    def test_account_id_masked(self, rec, db_path):
+        """account_id est masqué dans le payload."""
+        rec.record_event("bot1", "event", {"account_id": 123456})
+        raw = _read_all_payloads(db_path)[0]
+        assert "123456" not in raw
+        assert "***" in raw
+
+    def test_user_id_masked(self, rec, db_path):
+        """user_id est masqué dans le payload."""
+        rec.record_event("bot1", "event", {"user_id": 456789})
+        raw = _read_all_payloads(db_path)[0]
+        assert "456789" not in raw
+        assert "***" in raw
+
+    def test_tg_id_masked(self, rec, db_path):
+        """tg_id est masqué dans le payload."""
+        rec.record_event("bot1", "event", {"tg_id": 789012})
+        raw = _read_all_payloads(db_path)[0]
+        assert "789012" not in raw
+        assert "***" in raw
+
+    def test_id_masked(self, rec, db_path):
+        """id est masqué dans le payload."""
+        rec.record_event("bot1", "event", {"id": 1})
+        raw = _read_all_payloads(db_path)[0]
+        # "1" alone is too short to assert absence, check *** present
+        assert "***" in raw
+
+    def test_all_account_keys_masked_together(self, rec, db_path):
+        """Toutes les clés account sont masquées ensemble."""
+        rec.record_event(
+            "bot1",
+            "event",
+            {"account_id": 123, "user_id": 456, "tg_id": 789, "id": 1},
+        )
+        raw = _read_all_payloads(db_path)[0]
+        assert "123" not in raw
+        assert "456" not in raw
+        assert "789" not in raw
+        assert "***" in raw
+
+
+# ---------------------------------------------------------------------------
+# S3 : session string Telethon masquée dans les valeurs string libres
+# ---------------------------------------------------------------------------
+
+
+class TestSessionStringMaskingInValue:
+    """S3 — Une session string Telethon dans une valeur libre est masquée."""
+
+    def test_session_string_in_free_value_masked(self, rec, db_path):
+        """Une fausse session string (>=30 chars base64 après '1') est masquée."""
+        fake_session = "1A" + "b" * 40
+        rec.record_event("bot1", "event", {"info": fake_session})
+        raw = _read_all_payloads(db_path)[0]
+        assert fake_session not in raw
+        assert "***" in raw
+
+    def test_short_normal_text_not_masked(self, rec, db_path):
+        """Un texte court normal reste intact."""
+        rec.record_event("bot1", "event", {"msg": "hello world"})
+        raw = _read_all_payloads(db_path)[0]
+        assert "hello world" in raw
+
+    def test_bot_token_still_masked_by_token_re(self, rec, db_path):
+        """Un token bot (TOKEN_RE) reste masqué — pas de régression."""
+        bot_token = "8123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        rec.record_event("bot1", "event", {"info": bot_token})
+        raw = _read_all_payloads(db_path)[0]
+        assert bot_token not in raw
+        assert "***" in raw
+
+
+# ---------------------------------------------------------------------------
+# S1 : payload error aiogram ne contient pas "msg" (str(exc) supprimé)
+# ---------------------------------------------------------------------------
+
+
+class TestAiogramErrorPayloadNoMsg:
+    """S1 — Le payload error aiogram contient uniquement {"type": "<ExcName>"}."""
+
+    def test_error_payload_has_type_not_msg(self, rec, db_path):
+        """Le payload error n'a que 'type', jamais 'msg'."""
+        import asyncio
+        import json
+
+        from tgwatch.adapters.aiogram import TgwatchMiddleware
+        from tgwatch.core.storage import Storage
+
+        storage = Storage(str(db_path))
+
+        async def _run():
+            mw = TgwatchMiddleware(rec, "bot_s1")
+
+            async def failing_handler(event, data):
+                raise RuntimeError("secret info that must not leak")
+
+            from aiogram.types import Update
+
+            update = Update.model_validate({"update_id": 1})
+            try:
+                await mw(failing_handler, update, {})
+            except RuntimeError:
+                pass
+
+        asyncio.run(_run())
+
+        payloads = _read_all_payloads(db_path)
+        error_payloads = [p for p in payloads if "RuntimeError" in p or "error" in p]
+        # Find error event
+        all_raw = " ".join(payloads)
+        assert "msg" not in all_raw or all(['"msg"' not in p for p in payloads if "RuntimeError" in p])
+        # Specifically: payload should have type=RuntimeError
+        error_raw = [p for p in payloads if "RuntimeError" in p]
+        assert len(error_raw) >= 1
+        for raw in error_raw:
+            parsed = json.loads(raw)
+            assert "type" in parsed
+            assert parsed["type"] == "RuntimeError"
+            assert "msg" not in parsed
