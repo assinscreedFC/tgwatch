@@ -113,6 +113,7 @@ class Storage:
             )
             conn.commit()
             logger.debug("Client créé : name=%s kind=%s id=%s", name, kind, cursor.lastrowid)
+            assert cursor.lastrowid is not None
             return cursor.lastrowid
         finally:
             conn.close()
@@ -237,6 +238,7 @@ class Storage:
                 event_type,
                 cursor.lastrowid,
             )
+            assert cursor.lastrowid is not None
             return cursor.lastrowid
         finally:
             conn.close()
@@ -307,6 +309,7 @@ class Storage:
                 alert_type,
                 cursor.lastrowid,
             )
+            assert cursor.lastrowid is not None
             return cursor.lastrowid
         finally:
             conn.close()

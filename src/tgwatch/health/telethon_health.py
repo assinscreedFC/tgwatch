@@ -5,13 +5,17 @@ Tous les imports telethon sont LAZY (à l'intérieur des fonctions) pour que le 
 tgwatch reste importable sans telethon installé.
 
 Aucun import de Recorder au top-level (évite cycle health -> core -> health).
-Le type 'Recorder' est référencé en commentaire uniquement.
+Le type 'Recorder' est importé uniquement sous TYPE_CHECKING (annotations différées).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tgwatch.core.recorder import Recorder
 
 from tgwatch.core.models import Health
 
@@ -102,7 +106,7 @@ def classify_exception(exc: BaseException) -> Health | None:
 def report_exception(
     client_name: str,
     exc: BaseException,
-    recorder,  # type: Recorder — pas d'import pour éviter le cycle health -> core
+    recorder: "Recorder",
 ) -> None:
     """Classifie une exception et met à jour la santé worst-state-wins.
 
@@ -162,7 +166,7 @@ def report_exception(
 def _apply_health(
     client_name: str,
     new: Health,
-    recorder,  # type: Recorder
+    recorder: "Recorder",
     source: str,
 ) -> None:
     """Applique worst-state-wins et persiste si l'état est plus grave.

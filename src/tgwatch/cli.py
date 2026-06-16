@@ -142,13 +142,15 @@ def cmd_watch(args: argparse.Namespace) -> int:
         print("Erreur : arguments requis manquants : " + ", ".join(missing), file=sys.stderr)
         return 1
 
+    assert storage_path is not None and token is not None and chat_id is not None
+
     # Imports locaux (paresseux) — watch_loop et Alerter sont stdlib, mais on évite
     # de les charger lors d'un simple `import tgwatch.cli` ou `tgwatch status`.
     from tgwatch.alert.telegram import Alerter
     from tgwatch.watchdog import watch_loop
 
     storage = Storage(storage_path)
-    alerter = Alerter(storage, token, chat_id)  # type: ignore[arg-type]
+    alerter = Alerter(storage, token, chat_id)
     print("watchdog démarré (Ctrl-C pour arrêter)")
     watch_loop(
         storage,
