@@ -5,7 +5,7 @@ venv/
 dist/
 build/
 *.egg-info/
-tgwatch.db
+*.db
 *.db-wal
 *.db-shm
 .pytest_cache/

@@ -409,3 +409,44 @@ class TestStartProbe:
         # Test NON-async : pas de loop active => RuntimeError attendu
         with pytest.raises(RuntimeError):
             start_probe(fake_client, recorder, "userbot1")
+
+
+# ---------------------------------------------------------------------------
+# Task 3 : _apply_health — pas d'appel set_health si resolved == current
+# ---------------------------------------------------------------------------
+
+
+class TestApplyHealthNoopWhenEqual:
+    """_apply_health ne doit pas appeler set_health si l'état ne change pas (MEDIUM)."""
+
+    async def test_apply_health_noop_when_same_state(self, recorder):
+        """Si get_me() retourne SAIN et état courant est déjà SAIN, set_health non appelé."""
+        from unittest.mock import MagicMock, patch
+        from tgwatch.health.telethon_health import _apply_health
+
+        # Persiste SAIN d'abord
+        recorder.set_health("userbot1", Health.SAIN)
+
+        # Patch set_health pour détecter les appels
+        with patch.object(recorder, "set_health") as mock_set:
+            _apply_health("userbot1", Health.SAIN, recorder, "test_source")
+            mock_set.assert_not_called()
+
+    async def test_apply_health_called_when_state_changes(self, recorder):
+        """Si état courant est NA et nouveau est SAIN, set_health est appelé."""
+        from unittest.mock import patch
+        from tgwatch.health.telethon_health import _apply_health
+
+        with patch.object(recorder, "set_health") as mock_set:
+            _apply_health("userbot_new", Health.SAIN, recorder, "test_source")
+            mock_set.assert_called_once_with("userbot_new", Health.SAIN)
+
+    async def test_apply_health_banni_stays_banni(self, recorder, storage):
+        """_apply_health avec SAIN depuis état BANNI : set_health non appelé (worst-state-wins)."""
+        from tgwatch.health.telethon_health import _apply_health
+
+        recorder.set_health("userbot1", Health.BANNI)
+        # resolved = _resolve_health(BANNI, SAIN) = BANNI (même que current) → no-op
+        _apply_health("userbot1", Health.SAIN, recorder, "probe")
+        client = storage.get_client_by_name("userbot1")
+        assert client.health == Health.BANNI

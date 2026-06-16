@@ -325,3 +325,36 @@ async def test_intercept_missing_call_safe(recorder):
             await task
         except (asyncio.CancelledError, Exception):
             pass
+
+
+# ---------------------------------------------------------------------------
+# Task 3 : handler try/except — recorder.heartbeat qui lève ne propage pas
+# ---------------------------------------------------------------------------
+
+
+async def test_handler_recorder_error_not_propagated(recorder):
+    """Si recorder.heartbeat lève, le handler logge et ne propage pas l'exception."""
+    from unittest.mock import MagicMock, patch
+    from tgwatch.adapters.telethon import attach
+
+    client = FakeTelethonClient()
+
+    # Remplacer recorder par un fake dont heartbeat lève
+    fake_recorder = MagicMock()
+    fake_recorder.heartbeat.side_effect = RuntimeError("DB is gone")
+
+    task = attach(client, fake_recorder, "userbot_safe")
+
+    # simulate_message ne doit PAS propager l'exception du recorder
+    try:
+        await client.simulate_message()
+    except Exception as exc:
+        pytest.fail(f"Le handler a propagé une exception : {exc}")
+
+    # Cleanup
+    if task is not None:
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass

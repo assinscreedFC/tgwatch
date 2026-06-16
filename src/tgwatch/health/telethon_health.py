@@ -186,7 +186,8 @@ def _apply_health(
     """
     current = recorder.get_health(client_name)
     resolved = _resolve_health(current, new)
-    recorder.set_health(client_name, resolved)
+    if resolved != current:
+        recorder.set_health(client_name, resolved)
     logger.debug(
         "Sonde %s : %s -> %s (source: %s)",
         client_name,

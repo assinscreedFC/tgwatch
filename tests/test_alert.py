@@ -324,3 +324,42 @@ class TestAlerterMaybeSend:
         # Assert
         assert result is True
         assert len(sender.calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 3 : Alerter chat_id validation (MEDIUM)
+# ---------------------------------------------------------------------------
+
+
+class TestAlerterChatIdValidation:
+    """Alerter.__init__ lève ValueError si chat_id n'est pas un entier."""
+
+    def test_non_numeric_chat_id_raises(self, storage):
+        """chat_id='abc' → ValueError."""
+        with pytest.raises(ValueError):
+            Alerter(storage, token="tok", chat_id="abc")
+
+    def test_empty_chat_id_raises(self, storage):
+        """chat_id='' → ValueError."""
+        with pytest.raises(ValueError):
+            Alerter(storage, token="tok", chat_id="")
+
+    def test_float_string_chat_id_raises(self, storage):
+        """chat_id='1.5' → ValueError (non entier)."""
+        with pytest.raises(ValueError):
+            Alerter(storage, token="tok", chat_id="1.5")
+
+    def test_positive_numeric_chat_id_accepted(self, storage):
+        """chat_id='12345' → accepté sans erreur."""
+        alerter = Alerter(storage, token="tok", chat_id="12345", sender=make_ok_sender())
+        assert alerter._chat_id == "12345"
+
+    def test_negative_numeric_chat_id_accepted(self, storage):
+        """chat_id='-100123' → accepté (groupes/canaux négatifs)."""
+        alerter = Alerter(storage, token="tok", chat_id="-100123", sender=make_ok_sender())
+        assert alerter._chat_id == "-100123"
+
+    def test_integer_chat_id_accepted(self, storage):
+        """chat_id=42 (int) → converti en str et accepté."""
+        alerter = Alerter(storage, token="tok", chat_id=42, sender=make_ok_sender())
+        assert alerter._chat_id == "42"

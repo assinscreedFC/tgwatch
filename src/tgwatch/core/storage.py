@@ -87,6 +87,12 @@ class Storage:
                 )
                 """
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_client ON events(client_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_alerts_client_type ON alerts_sent(client_id, type)"
+            )
             conn.commit()
             logger.debug("Schema initialisé (WAL) sur %s", self.path)
         finally:

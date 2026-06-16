@@ -6,11 +6,13 @@ Le token n'apparaît jamais dans les logs (on logge uniquement API_BASE).
 """
 
 import logging
+import re
 import socket
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,10 @@ class Alerter:
         self._storage = storage
         self._token = token
         self._chat_id = str(chat_id)
+        if not re.fullmatch(r"-?\d+", self._chat_id):
+            raise ValueError(
+                f"chat_id doit être un entier (positif ou négatif), reçu : {chat_id!r}"
+            )
         self._sender = sender
         self._dedup_window = dedup_window
         self._backoff_base = backoff_base
@@ -114,8 +120,6 @@ class Alerter:
         Returns:
             True si envoyée, False si bloquée par dédup OU si l'envoi a échoué.
         """
-        from datetime import datetime, timezone
-
         current = now if now is not None else datetime.now(timezone.utc)
         last_ts = self._storage.last_alert_sent(client_id, alert_type)
         if last_ts is not None:

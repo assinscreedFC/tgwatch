@@ -55,7 +55,7 @@ def attach(
     client,
     recorder,
     name: str,
-    probe_interval: int = 300,
+    probe_interval: int | None = None,
     auto_intercept: bool = False,
 ) -> "Optional[asyncio.Task]":
     """Attache le monitoring sur le client Telethon.
@@ -94,10 +94,19 @@ def attach(
             "Installez avec: pip install 'tgwatch[telethon]'"
         ) from exc
 
-    # --- Phase 2 : handler NewMessage heartbeat + compteur msg (NE PAS MODIFIER) ---
+    if probe_interval is None:
+        from tgwatch.health.telethon_health import DEFAULT_PROBE_INTERVAL
+        probe_interval = DEFAULT_PROBE_INTERVAL
+
+    # --- Phase 2 : handler NewMessage heartbeat + compteur msg ---
     async def _tgwatch_handler(event) -> None:
-        recorder.heartbeat(name)
-        recorder.record_event(name, "msg", None)
+        try:
+            recorder.heartbeat(name)
+            recorder.record_event(name, "msg", None)
+        except Exception:
+            logger.warning(
+                "Échec monitoring handler telethon pour %s", name, exc_info=True
+            )
 
     client.add_event_handler(_tgwatch_handler, events.NewMessage)
     logger.debug("Handler NewMessage enregistré pour : %s", name)

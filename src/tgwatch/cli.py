@@ -55,19 +55,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch_p.add_argument(
         "--interval",
-        type=int,
+        type=_positive_int,
         default=60,
         help="Intervalle en secondes entre deux vérifications (défaut : 60)",
     )
     watch_p.add_argument(
         "--heartbeat-threshold",
         dest="heartbeat_threshold",
-        type=int,
+        type=_positive_int,
         default=300,
         help="Secondes sans heartbeat avant de marquer un client DOWN (défaut : 300)",
     )
 
     return parser
+
+
+def _positive_int(raw: str) -> int:
+    """Type argparse : entier strictement positif (> 0).
+
+    Lève argparse.ArgumentTypeError si la valeur est <= 0 ou non entière.
+    """
+    try:
+        value = int(raw)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Valeur entière requise, reçu : {raw!r}")
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"La valeur doit être > 0, reçu : {value}")
+    return value
 
 
 def _resolve(value: str | None, env_name: str) -> str | None:
@@ -144,6 +158,12 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
     assert storage_path is not None and token is not None and chat_id is not None
 
+    # Avertir si les secrets sont passés en flag CLI plutôt qu'en variable d'env
+    if args.token is not None:
+        logger.warning("Préférez la variable d'env %s au flag --token", ENV_TOKEN)
+    if args.chat_id is not None:
+        logger.warning("Préférez la variable d'env %s au flag --chat-id", ENV_CHAT_ID)
+
     # Imports locaux (paresseux) — watch_loop et Alerter sont stdlib, mais on évite
     # de les charger lors d'un simple `import tgwatch.cli` ou `tgwatch status`.
     from tgwatch.alert.telegram import Alerter
@@ -151,7 +171,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
     storage = Storage(storage_path)
     alerter = Alerter(storage, token, chat_id)
-    print("watchdog démarré (Ctrl-C pour arrêter)")
+    logger.info("watchdog démarré (Ctrl-C pour arrêter)")
     watch_loop(
         storage,
         alerter,

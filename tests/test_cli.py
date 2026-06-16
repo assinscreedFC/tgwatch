@@ -7,6 +7,7 @@ sécurité token (jamais en stdout/stderr), PKG-01 (sys.modules propre).
 
 from __future__ import annotations
 
+import logging
 import sys
 from io import StringIO
 from unittest.mock import MagicMock, patch
@@ -504,3 +505,97 @@ def test_main_no_command(capsys: pytest.CaptureFixture) -> None:
     ret = main([])
     assert ret == 2
     assert capsys.readouterr().err != ""
+
+
+# ---------------------------------------------------------------------------
+# Task 3 : _positive_int — validation --interval et --heartbeat-threshold
+# ---------------------------------------------------------------------------
+
+
+class TestPositiveInt:
+    """_positive_int rejette les valeurs <= 0 (SystemExit code 2 via argparse)."""
+
+    def test_interval_zero_rejected(self, capsys: pytest.CaptureFixture) -> None:
+        """--interval 0 → SystemExit(2)."""
+        with pytest.raises(SystemExit) as exc_info:
+            build_parser().parse_args(["watch", "--interval", "0",
+                                       "--storage", "x.db", "--token", "t", "--chat-id", "1"])
+        assert exc_info.value.code == 2
+
+    def test_interval_negative_rejected(self, capsys: pytest.CaptureFixture) -> None:
+        """--interval -5 → SystemExit(2)."""
+        with pytest.raises(SystemExit) as exc_info:
+            build_parser().parse_args(["watch", "--interval", "-5",
+                                       "--storage", "x.db", "--token", "t", "--chat-id", "1"])
+        assert exc_info.value.code == 2
+
+    def test_interval_positive_accepted(self) -> None:
+        """--interval 60 → accepté, valeur == 60."""
+        ns = build_parser().parse_args(["watch", "--interval", "60",
+                                        "--storage", "x.db", "--token", "t", "--chat-id", "1"])
+        assert ns.interval == 60
+
+    def test_heartbeat_threshold_zero_rejected(self, capsys: pytest.CaptureFixture) -> None:
+        """--heartbeat-threshold 0 → SystemExit(2)."""
+        with pytest.raises(SystemExit) as exc_info:
+            build_parser().parse_args(["watch", "--heartbeat-threshold", "0",
+                                       "--storage", "x.db", "--token", "t", "--chat-id", "1"])
+        assert exc_info.value.code == 2
+
+    def test_heartbeat_threshold_negative_rejected(self, capsys: pytest.CaptureFixture) -> None:
+        """--heartbeat-threshold -5 → SystemExit(2)."""
+        with pytest.raises(SystemExit) as exc_info:
+            build_parser().parse_args(["watch", "--heartbeat-threshold", "-5",
+                                       "--storage", "x.db", "--token", "t", "--chat-id", "1"])
+        assert exc_info.value.code == 2
+
+    def test_heartbeat_threshold_positive_accepted(self) -> None:
+        """--heartbeat-threshold 300 → accepté, valeur == 300."""
+        ns = build_parser().parse_args(["watch", "--heartbeat-threshold", "300",
+                                        "--storage", "x.db", "--token", "t", "--chat-id", "1"])
+        assert ns.heartbeat_threshold == 300
+
+
+# ---------------------------------------------------------------------------
+# Task 3 : warning quand token/chat_id passés en flag
+# ---------------------------------------------------------------------------
+
+
+class TestFlagSecretWarning:
+    """logger.warning émis quand --token ou --chat-id passés en flag CLI."""
+
+    def test_token_flag_triggers_warning(
+        self, tmp_db: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Passer --token en flag → warning dans les logs."""
+        with patch("tgwatch.watchdog.watch_loop"):
+            with caplog.at_level(logging.WARNING, logger="tgwatch.cli"):
+                main(["watch", "--storage", tmp_db, "--token", "tok", "--chat-id", "1"])
+        assert any("TGWATCH_ALERT_BOT_TOKEN" in r.message for r in caplog.records)
+
+    def test_chat_id_flag_triggers_warning(
+        self, tmp_db: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Passer --chat-id en flag → warning dans les logs."""
+        with patch("tgwatch.watchdog.watch_loop"):
+            with caplog.at_level(logging.WARNING, logger="tgwatch.cli"):
+                main(["watch", "--storage", tmp_db, "--token", "tok", "--chat-id", "1"])
+        assert any("TGWATCH_ALERT_CHAT_ID" in r.message for r in caplog.records)
+
+    def test_env_only_no_warning(
+        self,
+        tmp_db: str,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Variables d'env uniquement → aucun warning token/chat_id."""
+        monkeypatch.setenv("TGWATCH_ALERT_BOT_TOKEN", "tok")
+        monkeypatch.setenv("TGWATCH_ALERT_CHAT_ID", "1")
+        with patch("tgwatch.watchdog.watch_loop"):
+            with caplog.at_level(logging.WARNING, logger="tgwatch.cli"):
+                main(["watch", "--storage", tmp_db])
+        token_warnings = [
+            r for r in caplog.records
+            if "TGWATCH_ALERT_BOT_TOKEN" in r.message or "TGWATCH_ALERT_CHAT_ID" in r.message
+        ]
+        assert token_warnings == []
