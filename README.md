@@ -168,3 +168,7 @@ Dépendances **unidirectionnelles** vers `core`. `core` ne connaît rien de Tele
 ## Licence
 
 MIT.
+
+## À propos
+
+tgwatch est construit et maintenu par [SolidScale](https://solidscale.tech), l'agence IA appliquée pour les entreprises françaises. On open-source les outils qu'on utilise en interne.

@@ -36,7 +36,7 @@ dev = [
 tgwatch = "tgwatch.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/assinscreedFC/tgwatch"
+Homepage = "https://solidscale.tech"
 Repository = "https://github.com/assinscreedFC/tgwatch"
 
 [tool.hatch.build.targets.wheel]
